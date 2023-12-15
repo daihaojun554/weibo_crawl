@@ -88,7 +88,7 @@ class WeiBoCrawl:
             else:
                 raise Exception('请先配置 cookie')
         except Exception as e:
-            logger.error("读取配置文件出错： {}".format(e))
+            logger.error("读取配置文件出错： {}，请配置cookie信息".format(e))
             raise e
 
     def check_user_info_exist(self, user_id: int) -> bool:
