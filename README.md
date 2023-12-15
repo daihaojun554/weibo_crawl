@@ -1,21 +1,36 @@
-README.md
-微博爬虫
 
-## 安装依赖
+# 微博用户信息爬取工具
+## 简介
+这是一个用于爬取微博用户信息的Python工具。通过提供用户ID列表，可以获取用户的昵称、头像、认证信息、个人简介等信息，并将结果保存在CSV文件中。
+
+## 如何使用
+### 1. 安装依赖
+确保你已经安装了以下依赖：
+
 ```bash
 pipenv install
 ```
-或者
-```bash
-pip install -r ./requirements.txt
+### 2. 配置文件
+在工具的根目录下创建一个config.json文件，配置用户ID列表和Cookies信息。示例：
+
+```json
+{
+  "user_id_list":"user_id_list.txt",
+  "cookies": "your_cookies_here"
+}
 ```
-
-### 配置
-在user_id_list.txt里面写入你要爬取的目标的userid，一个一行
-
-
-### 运行脚本
+### 3. 运行程序
+在命令行中执行以下命令：
 
 ```bash
-py ./weibo_crawl.py
+python weibo_crawl.py
 ```
+### 4. 查看结果
+用户信息将保存在./weibo/weibo_user_info.csv文件中
+## 注意事项
+请确保提供了正确的Cookies信息，以便成功访问微博接口。
+程序会自动检查是否已经获取过用户信息，避免重复请求。
+日志记录
+程序会在./logs目录下生成日志文件，用于记录运行过程中的信息和错误。
+## 免责声明
+本工具仅用于学习和研究目的，禁止用于非法用途。使用本工具时，请遵守微博的使用条款和规定。
