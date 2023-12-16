@@ -157,7 +157,7 @@ class WeiBoCrawl:
             else:
                 logger.error("请求微博接口失败")
 
-    def crawl_one_up_blogs(self, mid,crawl_page=10):
+    def crawl_one_up_blogs(self, mid, crawl_page=200):
         #  https://www.weibo.com/ajax/statuses/mymblog?uid=1885454921&page=1&feature=0
         for page in range(1, crawl_page+1):
             t = random.uniform(5, 10)
@@ -167,16 +167,29 @@ class WeiBoCrawl:
             resp = requests.get(url=base_url, headers=self.headers,
                                 cookies=self.cookies).json()
             if resp['ok'] == 1:
+                if not os.path.exists(os.path.join(self.script_path, 'weibo', str(mid), 'article.csv')):
+                    with open(os.path.join(self.script_path, 'weibo', str(mid), 'article.csv'), 'a', encoding='utf-8-sig', newline='') as f:
+                        csv.writer(f).writerow(
+                            ['id', 'created', 'text', 'comments_count', 'reposts_count', 'attitudes_count'])
                 for item in resp['data']['list']:
                     long_text_id = item['mblogid']
                     is_long_text = item['isLongText']
+                    already_exists = False
+                    with open(os.path.join(self.script_path, 'weibo', str(mid), 'article.csv'), 'r', encoding='utf-8-sig') as f:
+                        lines = f.readlines()
+                        for line in lines:
+                            if str(item['id']) == str(line.split(',')[0]):
+                                logger.info("当前博文已经存在，跳过")
+                                already_exists = True
+                    if already_exists:
+                        continue
                     if is_long_text:
                         logger.info("这是长的博文，{}".format(long_text_id))
-                        sleep(random.uniform(3,5))
+                        sleep(random.uniform(3, 5))
                         resp = requests.get(
                             f"https://www.weibo.com/ajax/statuses/longtext?id={long_text_id}", headers=self.headers, cookies=self.cookies).json()
                         if resp['ok'] == 1:
-                            item['text_raw'] = resp['data']['longTextContent']
+                            item['text_raw'] = resp['data']['longTextContent'] if "longTextContent" in resp['data'] else item['text_raw']
                     yield {
                         "id": item['id'],
                         "created": item['created_at'],
@@ -212,20 +225,9 @@ class WeiBoCrawl:
         blogs = self.crawl_one_up_blogs(mid)
         for blog in blogs:
             # 第一次进来要写表头，其他情况不用写，
-            if not os.path.exists(os.path.join(self.script_path, 'weibo', str(mid), 'article.csv')):
-                with open(os.path.join(self.script_path, 'weibo', str(mid), 'article.csv'), 'a', encoding='utf-8-sig', newline='') as f:
-                    csv.writer(f).writerow(
-                        ['id','created' , 'text', 'comments_count', 'reposts_count', 'attitudes_count'])
-             # 如果blog['id']在里面已经在article.csv里存在了，就不用再次写入
-            with open(os.path.join(self.script_path, 'weibo', str(mid), 'article.csv'), 'r', encoding='utf-8-sig') as f:
-                lines = f.readlines()
-                for line in lines:
-                    if str(blog['id']) == str(line.split(',')[0]):
-                        logger.info("当前博文已经存在，跳过")
-                        continue
             # 将这个博主的信息写入到 ./weibo/{mid}/下面的article.csv文件里面
             with open(os.path.join(self.script_path, 'weibo', str(mid), 'article.csv'), 'a', encoding='utf-8-sig', newline='') as f:
-                csv.writer(f).writerow([blog['id'],blog['created'],  blog['text'],
+                csv.writer(f).writerow([blog['id'], blog['created'],  blog['text'],
                                         blog['comments_count'], blog['reposts_count'], blog['attitudes_count']])
 
     def run(self):
@@ -241,6 +243,4 @@ class WeiBoCrawl:
 
 if __name__ == "__main__":
     wb = WeiBoCrawl()
-    # 这里可以添加对 wb 对象的操作，例如调用 wb 的方法进行爬取等操作。
-    # wb.parse_user_info()
     wb.run()
