@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    '%(asctime)s - %(pathname)s - %(funcName)s - %(module)s - %(levelname)s - %(message)s')
 
 ch = logging.StreamHandler()
 ch.setFormatter(formatter)
@@ -92,7 +92,7 @@ class WeiBoCrawl:
             raise e
 
     def check_user_info_exist(self, user_id: int) -> bool:
-        with open(self.file_path, 'r',encoding='utf-8-sig') as f:
+        with open(self.file_path, 'r', encoding='utf-8-sig') as f:
             reader = csv.reader(f)
             for row in reader:
                 if row and row[0] == user_id:
@@ -157,8 +157,90 @@ class WeiBoCrawl:
             else:
                 logger.error("请求微博接口失败")
 
+    def crawl_one_up_blogs(self, mid,crawl_page=10):
+        #  https://www.weibo.com/ajax/statuses/mymblog?uid=1885454921&page=1&feature=0
+        for page in range(1, crawl_page+1):
+            t = random.uniform(5, 10)
+            logger.info('爬取用户id:{} 的第{}页微博,休眠中{}'.format(mid, page, t))
+            sleep(t)
+            base_url = f'https://www.weibo.com/ajax/statuses/mymblog?uid={mid}&page={page}&feature=0'
+            resp = requests.get(url=base_url, headers=self.headers,
+                                cookies=self.cookies).json()
+            if resp['ok'] == 1:
+                for item in resp['data']['list']:
+                    long_text_id = item['mblogid']
+                    is_long_text = item['isLongText']
+                    if is_long_text:
+                        logger.info("这是长的博文，{}".format(long_text_id))
+                        sleep(random.uniform(3,5))
+                        resp = requests.get(
+                            f"https://www.weibo.com/ajax/statuses/longtext?id={long_text_id}", headers=self.headers, cookies=self.cookies).json()
+                        if resp['ok'] == 1:
+                            item['text_raw'] = resp['data']['longTextContent']
+                    yield {
+                        "id": item['id'],
+                        "created": item['created_at'],
+                        'text': item['text_raw'],
+                        # 评论内容
+                        'comments_count': item['comments_count'],
+                        # 转发数量
+                        'reposts_count': item['reposts_count'],
+                        # 点赞数量
+                        'attitudes_count': item['attitudes_count']
+                    }
+                    logger.info('爬取微博id:{} 的一条微博成功,内容为{}'.format(mid, {
+
+                        "created": item['created_at'],
+                        "id": item['id'],
+
+                        'text': item['text_raw'],
+                        # 评论内容
+                        'comments_count': item['comments_count'],
+                        # 转发数量
+                        'reposts_count': item['reposts_count'],
+                        # 点赞数量
+                        'attitudes_count': item['attitudes_count']
+                    }))
+                    # 将爬取的内容存入到weibo/mid/info.csv里面
+            else:
+                logger.warning('请求失败，请检查cookie是否过期或者账号是否被封锁')
+                print(resp)
+
+    def parse_one_up_blogs(self, mid):
+        os.makedirs(os.path.join(self.script_path,
+                    'weibo', str(mid)), exist_ok=True)
+        blogs = self.crawl_one_up_blogs(mid)
+        for blog in blogs:
+            # 第一次进来要写表头，其他情况不用写，
+            if not os.path.exists(os.path.join(self.script_path, 'weibo', str(mid), 'article.csv')):
+                with open(os.path.join(self.script_path, 'weibo', str(mid), 'article.csv'), 'a', encoding='utf-8-sig', newline='') as f:
+                    csv.writer(f).writerow(
+                        ['id','created' , 'text', 'comments_count', 'reposts_count', 'attitudes_count'])
+             # 如果blog['id']在里面已经在article.csv里存在了，就不用再次写入
+            with open(os.path.join(self.script_path, 'weibo', str(mid), 'article.csv'), 'r', encoding='utf-8-sig') as f:
+                lines = f.readlines()
+                for line in lines:
+                    if str(blog['id']) == str(line.split(',')[0]):
+                        logger.info("当前博文已经存在，跳过")
+                        continue
+            # 将这个博主的信息写入到 ./weibo/{mid}/下面的article.csv文件里面
+            with open(os.path.join(self.script_path, 'weibo', str(mid), 'article.csv'), 'a', encoding='utf-8-sig', newline='') as f:
+                csv.writer(f).writerow([blog['id'],blog['created'],  blog['text'],
+                                        blog['comments_count'], blog['reposts_count'], blog['attitudes_count']])
+
+    def run(self):
+        self.parse_user_info()
+        for mid in self.user_id_list:
+            self.parse_one_up_blogs(mid)
+            logger.info("休眠10s~~~")
+            sleep(10)
+
+        logger.info("爬取完成")
+        return True
+
 
 if __name__ == "__main__":
     wb = WeiBoCrawl()
     # 这里可以添加对 wb 对象的操作，例如调用 wb 的方法进行爬取等操作。
-    wb.parse_user_info()
+    # wb.parse_user_info()
+    wb.run()
